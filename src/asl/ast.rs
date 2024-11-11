@@ -3,6 +3,8 @@ use std::{
     fmt::{self, Write},
 };
 
+use super::lexer::Token;
+
 #[derive(Debug, Clone)]
 pub struct Case<'a> {
     pub(crate) clauses: Vec<CaseClause<'a>>,
@@ -192,7 +194,8 @@ impl<'a> CaseVisitor {
         indentation_amt: usize,
         buffer: &mut String,
         opcodes: &mut BTreeSet<&'a str>,
-    ) -> Result<(), Box<dyn std::error::Error>> {
+        encodings: &mut BTreeSet<&'a str>,
+    ) -> anyhow::Result<()> {
         let indentation = vec![" "; indentation_amt].join("");
 
         write!(buffer, "{{\n")?;
@@ -208,7 +211,7 @@ impl<'a> CaseVisitor {
         write!(
             buffer,
             "{}",
-            CaseVisitor::write(case, indentation_amt + 4, true, opcodes)?
+            CaseVisitor::write(case, indentation_amt + 4, true, opcodes, encodings)?
         )?;
 
         write!(buffer, "\n{indentation}}}")?;
@@ -221,7 +224,8 @@ impl<'a> CaseVisitor {
         indentation_amt: usize,
         in_block: bool,
         opcodes: &mut BTreeSet<&'a str>,
-    ) -> Result<String, Box<dyn std::error::Error>> {
+        encodings: &mut BTreeSet<&'a str>,
+    ) -> anyhow::Result<String> {
         let mut buffer = String::new();
 
         let indentation = vec![" "; indentation_amt].join("");
@@ -236,8 +240,9 @@ impl<'a> CaseVisitor {
 
             match &when.body {
                 WhenBody::Case { .. } => panic!(),
-                WhenBody::Encoding { mnemonic, .. } => {
+                WhenBody::Encoding { mnemonic, name } => {
                     opcodes.insert(mnemonic);
+                    encodings.insert(name);
                     write!(buffer, "return OpCode::{}{end_char}", mnemonic)?
                 }
                 WhenBody::Unallocated => write!(buffer, "return OpCode::Unallocated{end_char}")?,
@@ -331,7 +336,13 @@ impl<'a> CaseVisitor {
                         write!(
                             buffer,
                             "{}",
-                            CaseVisitor::write(case, indentation_amt + 4, false, opcodes)?
+                            CaseVisitor::write(
+                                case,
+                                indentation_amt + 4,
+                                false,
+                                opcodes,
+                                encodings
+                            )?
                         )?;
                     } else {
                         Self::write_case_with_fields(
@@ -340,12 +351,13 @@ impl<'a> CaseVisitor {
                             indentation_amt + 4,
                             &mut buffer,
                             opcodes,
+                            encodings,
                         )?;
                     }
                 }
                 WhenBody::Encoding { mnemonic, .. } => {
                     opcodes.insert(mnemonic);
-                    write!(buffer, "return OpCode::{}{end_char}", mnemonic)?
+                    write!(buffer, "return OpCode::{mnemonic}{end_char}")?
                 }
                 WhenBody::Unallocated => write!(buffer, "return OpCode::Unallocated{end_char}")?,
                 WhenBody::Unpredictable => {
@@ -356,10 +368,115 @@ impl<'a> CaseVisitor {
             write!(buffer, "\n")?;
         }
 
-        write!(buffer, "{indentation}    _ => unreachable!(),\n")?;
+        write!(
+            buffer,
+            "{indentation}    _ => return OpCode::Unpredictable,\n"
+        )?;
 
         write!(buffer, "{indentation}}}")?;
 
         Ok(buffer)
     }
+}
+
+#[derive(Debug)]
+pub struct InstructionDefinition<'a> {
+    pub name: &'a str,
+    pub conditional: bool,
+    pub encodings: Vec<InstructionEncoding<'a>>,
+    pub postdecode: Vec<Token<'a>>,
+    pub execute: Vec<Token<'a>>,
+}
+
+#[derive(Debug)]
+pub struct InstructionEncoding<'a> {
+    pub name: &'a str,
+    pub inst_set: InstructionSet,
+    pub fields: Vec<Field<'a>>,
+    pub opcode: &'a str,
+    pub guard: Vec<Token<'a>>,
+    pub unpredictable_unless: Vec<Vec<Token<'a>>>,
+    pub decode: Vec<Token<'a>>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum InstructionSet {
+    A64,
+    A32,
+    /// 32-bit thumb
+    T32,
+    T16,
+}
+
+pub enum BinOp {
+    Eq,
+    Ne,
+    Gt,
+    Lt,
+    Ge,
+    Le,
+    Gte,
+    Lte,
+    Assignment,
+    LogicalAnd,
+    BitwiseAnd,
+    LogicalOr,
+    BitwiseOr,
+    In,
+    ShiftLeft,
+    ShiftRight,
+    Add,
+    Sub,
+    Mul,
+    Div,
+    Pow,
+    Xor,
+    Mod,
+}
+
+pub enum UnaryOp {
+    Neg,
+    Not,
+}
+
+pub enum Expr<'a> {
+    BinOp(Box<Self>, BinOp, Box<Self>),
+    UnaryOp(UnaryOp, Box<Self>),
+    FnCall { name: &'a str, args: Vec<Self> },
+    Undefined,
+    Index(Box<Self>),
+    Slice,
+    BinaryInteger(&'a str),
+    IntegerLit(&'a str),
+    Paren(Box<Self>),
+    Array(Vec<Self>),
+    Variable(&'a str),
+}
+
+pub enum Stmt<'a> {
+    If(AstIf<'a>),
+    For(AstFor<'a>),
+    FnDecl,
+    Case,
+    Assert(Expr<'a>),
+    Return(Expr<'a>),
+    Expr(Expr<'a>),
+    ArrayDecl {},
+}
+
+pub struct AstIf<'a> {
+    pub if_clauses: Vec<AstIfClause<'a>>,
+    pub else_clause: Option<Vec<Stmt<'a>>>,
+}
+
+pub struct AstIfClause<'a> {
+    pub cond: Expr<'a>,
+    pub body: Vec<Stmt<'a>>,
+}
+
+pub struct AstFor<'a> {
+    pub variable: &'a str,
+    pub init: Expr<'a>,
+    pub to: Expr<'a>,
+    pub body: Vec<Stmt<'a>>,
 }
