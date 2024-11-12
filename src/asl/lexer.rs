@@ -206,10 +206,10 @@ impl<'a> AslLexer<'a> {
     }
 
     fn next_byte(&mut self) -> Option<u8> {
-        self.buffer.get(self.cursor).copied().map(|b| {
-            self.cursor += 1;
-            b
-        })
+        self.buffer
+            .get(self.cursor)
+            .copied()
+            .inspect(|_| self.cursor += 1)
     }
 
     fn lex_eq(&mut self) -> Token<'a> {

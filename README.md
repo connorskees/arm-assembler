@@ -1,3 +1,1 @@
-## Decoder
-
-Auto-generated using [ARM's instruction specification](https://github.com/alastairreid/mra_tools)
+An ARM assembler and disassembler codegen'd from ARM's [architecture specification language](https://developer.arm.com/Architectures/Architecture%20Specification%20Language).

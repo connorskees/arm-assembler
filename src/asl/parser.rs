@@ -481,25 +481,25 @@ impl<'a> AslParser<'a> {
     }
 
     fn token_is_expr_end(tok: Token<'a>) -> bool {
-        match tok {
+        matches!(
+            tok,
             Token::CloseParen
-            | Token::CloseSquareBrace
-            | Token::CloseCurlyBrace
-            | Token::SemiColon
-            | Token::Indent
-            | Token::Deindent
-            | Token::Comma
-            | Token::To
-            | Token::Of
-            | Token::Else
-            | Token::For
-            | Token::While
-            | Token::Do
-            | Token::UnpredictableUnless
-            | Token::Decode
-            | Token::Then => true,
-            _ => false,
-        }
+                | Token::CloseSquareBrace
+                | Token::CloseCurlyBrace
+                | Token::SemiColon
+                | Token::Indent
+                | Token::Deindent
+                | Token::Comma
+                | Token::To
+                | Token::Of
+                | Token::Else
+                | Token::For
+                | Token::While
+                | Token::Do
+                | Token::UnpredictableUnless
+                | Token::Decode
+                | Token::Then
+        )
     }
 
     fn parse_expr(&mut self) -> anyhow::Result<Expr<'a>> {

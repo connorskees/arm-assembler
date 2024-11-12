@@ -196,7 +196,7 @@ impl<'a> CaseVisitor {
     ) -> anyhow::Result<()> {
         let indentation = vec![" "; indentation_amt].join("");
 
-        write!(buffer, "{{\n")?;
+        writeln!(buffer, "{{")?;
 
         for field in fields {
             writeln!(
@@ -273,7 +273,7 @@ impl<'a> CaseVisitor {
             write!(buffer, "match ({}) ", clauses.join(", "))?;
         }
 
-        write!(buffer, "{{\n")?;
+        writeln!(buffer, "{{")?;
 
         for when in &case.when {
             write!(buffer, "{indentation}    ")?;
@@ -286,14 +286,14 @@ impl<'a> CaseVisitor {
                 match clause {
                     WhenClause::Any => match_elements.push("_".to_owned()),
                     WhenClause::Concrete(opts) => {
-                        let options = BitOptions(*opts).options().join(" | ");
+                        let options = BitOptions(opts).options().join(" | ");
 
                         match_elements.push(options);
 
                         // write!(buffer, "{}, ", options)?;
                     }
                     WhenClause::Not(opts) => {
-                        let bit_options = BitOptions(*opts);
+                        let bit_options = BitOptions(opts);
 
                         let var_name = format!("var{}", nots.len());
 
@@ -301,7 +301,7 @@ impl<'a> CaseVisitor {
 
                         nots.push(Invert {
                             bit_options,
-                            var_name: var_name,
+                            var_name,
                         });
                     }
                 }
@@ -363,12 +363,12 @@ impl<'a> CaseVisitor {
                 }
             }
 
-            write!(buffer, "\n")?;
+            writeln!(buffer)?;
         }
 
-        write!(
+        writeln!(
             buffer,
-            "{indentation}    _ => return OpCode::Unpredictable,\n"
+            "{indentation}    _ => return OpCode::Unpredictable,"
         )?;
 
         write!(buffer, "{indentation}}}")?;
