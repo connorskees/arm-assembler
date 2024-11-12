@@ -28,8 +28,14 @@ pub enum Token<'a> {
     LessThanEqual,
     /// &&
     LogicalAnd,
-    /// &
+    /// AND
     BitwiseAnd,
+    /// ||
+    LogicalOr,
+    /// OR
+    BitwiseOr,
+    /// NOT
+    BitwiseNot,
     /// _
     Underscore,
     /// *
@@ -38,8 +44,15 @@ pub enum Token<'a> {
     Xor,
     /// ^
     Pow,
-    /// /
+    /// / or DIV
+    // todo: i think one is for reals and one is integer?
     Div,
+    /// otherwise
+    Otherwise,
+    /// while
+    While,
+    /// do
+    Do,
     /// (
     OpenParen,
     /// )
@@ -59,7 +72,7 @@ pub enum Token<'a> {
     /// !
     Bang,
     /// [0-9]+
-    IntegerLit(&'a str),
+    IntegerLit(u64),
     /// '[01x]+'
     BinaryInteger(&'a str),
     /// ,
@@ -72,8 +85,6 @@ pub enum Token<'a> {
     Minus,
     /// .
     Dot,
-    /// ||
-    BooleanOr,
     /// case
     Case,
     /// when
@@ -122,6 +133,8 @@ pub enum Token<'a> {
     Else,
     /// then
     Then,
+    /// IN
+    In,
     /// UNDEFINED
     Undefined,
     /// integer
@@ -148,11 +161,19 @@ pub enum Token<'a> {
     Mod,
     /// array
     Array,
+    /// bits(N)
+    Bits,
+    /// bit
+    Bit,
+    /// UNKNOWN
+    Unknown,
 }
 
 pub struct AslLexer<'a> {
     buffer: &'a [u8],
     pub cursor: usize,
+
+    pub ignore_indent: bool,
 
     indent_stack: Vec<usize>,
     pending_curlies: u32,
@@ -162,6 +183,7 @@ impl<'a> AslLexer<'a> {
     pub fn new(buffer: &'a [u8]) -> Self {
         Self {
             buffer,
+            ignore_indent: false,
             cursor: 0,
             pending_curlies: 0,
             indent_stack: vec![0],
@@ -171,7 +193,7 @@ impl<'a> AslLexer<'a> {
     pub fn debug_print(&self) {
         println!(
             "{}",
-            std::str::from_utf8(&self.buffer[self.cursor - 50..self.cursor]).unwrap()
+            std::str::from_utf8(&self.buffer[self.cursor.saturating_sub(50)..self.cursor]).unwrap()
         );
     }
 
@@ -260,9 +282,6 @@ impl<'a> AslLexer<'a> {
                 self.next_byte();
                 Token::LogicalAnd
             }
-            // todo: more things can cause plus, but i want to avoid a default
-            // case for now to catch any bugs
-            Some(b' ' | b'0'..=b'9' | b'a'..=b'z' | b'A'..=b'Z') => Token::BitwiseAnd,
             tok => todo!("{:?}", tok.map(|t| t as char)),
         }
     }
@@ -296,7 +315,7 @@ impl<'a> AslLexer<'a> {
 
     fn lex_bar(&mut self) -> Token<'a> {
         assert_eq!(self.next_byte(), Some(b'|'));
-        Token::BooleanOr
+        Token::LogicalOr
     }
 
     fn lex_underscore(&mut self) -> Token<'a> {
@@ -312,15 +331,30 @@ impl<'a> AslLexer<'a> {
 
     fn lex_integer(&mut self) -> Token<'a> {
         self.cursor -= 1;
-        let start = self.cursor;
+        let mut start = self.cursor;
 
-        while self.peek_byte().is_some_and(|b| b.is_ascii_digit()) {
+        let mut radix = 10;
+
+        if self.peek_byte() == Some(b'0') && self.peek_n_bytes(1) == Some(b'x') {
             self.next_byte();
+            self.next_byte();
+            start = self.cursor;
+            while self.peek_byte().is_some_and(|b| b.is_ascii_hexdigit()) {
+                self.next_byte();
+            }
+
+            radix = 16;
+        } else {
+            while self.peek_byte().is_some_and(|b| b.is_ascii_digit()) {
+                self.next_byte();
+            }
         }
 
         let end = self.cursor;
 
-        Token::IntegerLit(std::str::from_utf8(&self.buffer[start..end]).unwrap())
+        let s = std::str::from_utf8(&self.buffer[start..end]).unwrap();
+
+        Token::IntegerLit(u64::from_str_radix(s, radix).unwrap())
     }
 
     fn lex_ident(&mut self) -> Token<'a> {
@@ -359,6 +393,7 @@ impl<'a> AslLexer<'a> {
             b"__postdecode" => Token::PostDecode,
             b"if" => Token::If,
             b"then" => Token::Then,
+            b"IN" => Token::In,
             b"UNDEFINED" => Token::Undefined,
             b"integer" => Token::IntegerKeyword,
             b"boolean" => Token::Boolean,
@@ -374,7 +409,17 @@ impl<'a> AslLexer<'a> {
             b"return" => Token::Return,
             b"constant" => Token::Constant,
             b"MOD" => Token::Mod,
+            b"bits" => Token::Bits,
+            b"bit" => Token::Bit,
             b"array" => Token::Array,
+            b"AND" => Token::BitwiseAnd,
+            b"OR" => Token::BitwiseOr,
+            b"NOT" => Token::BitwiseNot,
+            b"UNKNOWN" => Token::Unknown,
+            b"DIV" => Token::Div,
+            b"otherwise" => Token::Otherwise,
+            b"while" => Token::While,
+            b"do" => Token::Do,
             val => Token::Ident(std::str::from_utf8(val).unwrap()),
         }
     }
@@ -405,7 +450,12 @@ impl<'a> AslLexer<'a> {
             self.next_byte();
         }
 
-        if indent == 0 && self.peek_byte().is_some_and(|b| b == b'\n') {
+        if self.ignore_indent {
+            return None;
+        }
+
+        if self.peek_byte().is_some_and(|b| b == b'\n') {
+            // indent == 0 &&
             return None;
         }
 
@@ -430,18 +480,6 @@ impl<'a> AslLexer<'a> {
         }
 
         None
-
-        // Some(Token::CloseCurlyBrace)
-    }
-
-    pub fn tokens_until_newline(&mut self) -> Vec<Token<'a>> {
-        let mut toks = Vec::new();
-
-        while self.peek_byte().is_some_and(|b| b != b'\n') {
-            toks.push(self.next().unwrap())
-        }
-
-        toks
     }
 
     fn lex_quoted_string(&mut self) -> Token<'a> {
@@ -526,6 +564,10 @@ impl<'a> AslLexer<'a> {
                 todo!("{:?}", tok as char)
             }
         })
+    }
+
+    pub fn at_end(&self) -> bool {
+        self.cursor >= self.buffer.len()
     }
 
     pub fn peek(&mut self) -> Option<Token<'a>> {

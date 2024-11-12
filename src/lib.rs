@@ -4,6 +4,7 @@ use std::io::Write;
 
 pub use asl::ast::*;
 pub use asl::parser::AslParser;
+use asl::CaseVisitor;
 pub use register::*;
 
 mod asl;
@@ -12,8 +13,8 @@ mod mnemonic;
 mod register;
 
 pub struct Inst {
-    opcode: decode::OpCode,
-    raw: u32,
+    pub opcode: decode::OpCode,
+    pub raw: u32,
 }
 
 pub fn decode_inst(bytes: u32) -> Inst {
@@ -39,12 +40,15 @@ fn write_prelude(file: &mut dyn Write) -> anyhow::Result<()> {
     Ok(())
 }
 
+#[allow(dead_code)]
 fn codegen() -> anyhow::Result<()> {
-    let arch_decode_str = std::fs::read("reduced_str.txt")?;
-    let arch_instrs_str = std::fs::read("reduced_inst.txt")?;
+    let arch_decode_str = std::fs::read("./src/asl/arch_decode.asl")?;
+    let arch_instrs_str = std::fs::read("./src/asl/arch_instrs.asl")?;
 
     let arch_decode = asl::parser::AslParser::parse_toplevel_case(&arch_decode_str)?;
     let arch_instrs = asl::parser::AslParser::parse_instruction_file(&arch_instrs_str)?;
+
+    dbg!(&arch_instrs);
 
     let mut opcode_to_fields = BTreeMap::new();
 
