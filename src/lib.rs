@@ -5,11 +5,11 @@ use std::io::Write;
 pub use asl::ast::*;
 pub use asl::parser::AslParser;
 use asl::CaseVisitor;
+use codegen::decode;
 pub use register::*;
 
 mod asl;
-mod decode;
-mod mnemonic;
+mod codegen;
 mod register;
 
 pub struct Inst {
