@@ -860,6 +860,7 @@ impl<'a> AslParser<'a> {
                 )))
             }
             Some(Token::While) => self.parse_while(),
+            Some(Token::Enumeration) => self.parse_enum(),
             tok => {
                 self.tokens.debug_print();
                 todo!("{tok:?}")
@@ -869,6 +870,16 @@ impl<'a> AslParser<'a> {
         self.consume_if_exists(Token::SemiColon);
 
         Ok(Some(val?))
+    }
+
+    fn parse_enum(&mut self) -> anyhow::Result<Stmt<'a>> {
+        self.expect_token(Token::Enumeration)?;
+        let name = self.expect_ident()?;
+        self.expect_token(Token::OpenCurlyBrace)?;
+        let variants = self.parse_comma_separated(Self::expect_ident)?;
+        self.expect_token(Token::CloseCurlyBrace)?;
+        self.expect_token(Token::SemiColon)?;
+        Ok(Stmt::Enum { name, variants })
     }
 
     fn parse_while(&mut self) -> anyhow::Result<Stmt<'a>> {

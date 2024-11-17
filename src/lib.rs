@@ -149,6 +149,15 @@ mod test {
     use crate::{asl, codegen, decode::decode_inst};
 
     #[test]
+    fn test_func_parsing() {
+        let input = std::fs::read("./src/asl/arch.asl").unwrap();
+
+        let expr = asl::parser::AslParser::parse_instruction_file(&input).unwrap();
+
+        dbg!(expr);
+    }
+
+    #[test]
     fn test_handwritten_inst_parser() {
         let input = std::fs::read("./src/asl/arch_instrs.asl").unwrap();
 

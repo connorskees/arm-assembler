@@ -167,6 +167,8 @@ pub enum Token<'a> {
     Bit,
     /// UNKNOWN
     Unknown,
+    /// enumeration
+    Enumeration,
 }
 
 pub struct AslLexer<'a> {
@@ -420,6 +422,7 @@ impl<'a> AslLexer<'a> {
             b"otherwise" => Token::Otherwise,
             b"while" => Token::While,
             b"do" => Token::Do,
+            b"enumeration" => Token::Enumeration,
             val => Token::Ident(std::str::from_utf8(val).unwrap()),
         }
     }

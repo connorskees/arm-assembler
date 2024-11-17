@@ -133,6 +133,10 @@ pub enum Stmt<'a> {
         val: Expr<'a>,
     },
     While(AstWhile<'a>),
+    Enum {
+        name: &'a str,
+        variants: Vec<&'a str>,
+    },
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
